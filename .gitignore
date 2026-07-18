@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Personal planning docs, not part of the portfolio artifact
+agentcli-phase-plan.pdf
