@@ -1,8 +1,13 @@
 import os
-from typing import Iterator
+from typing import Any, Iterator
 
 from openai import OpenAI
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+from openai.types.chat import (
+    ChatCompletionToolParam,
+    ChatCompletionMessageParam,
+    ChatCompletion,
+)
 
 
 class AzureLLMProvider:
@@ -15,6 +20,19 @@ class AzureLLMProvider:
             api_key=get_bearer_token_provider(
                 DefaultAzureCredential(), "https://ai.azure.com/.default"
             ),
+        )
+
+    def ask_for_tools(
+        self,
+        messages: list[Any],
+        tools: list[Any],
+    ) -> ChatCompletion:
+        return self._client.chat.completions.create(
+            model=self._model,
+            messages=messages,
+            stream=False,
+            tools=tools,
+            max_tokens=self._tokens_max,
         )
 
     def ask(self, prompt: str) -> Iterator[str]:
