@@ -8,12 +8,26 @@ from agentcli.providers.azure_llm_provider import AzureLLMProvider
 import agentcli.tools.financial_calculator as tools
 
 
-def main(prompt: str):
+def main():
     provider = AzureLLMProvider()
     schemas = tools.get_calculator_tools()
-    messages: Any = [{"role": "user", "content": prompt}]
-    response = provider.ask_for_tools(messages, schemas)
+    messages: Any = []
 
+    while True:
+        try:
+            prompt = input(">>> ")
+            messages.append({"role": "user", "content": prompt})
+            call_tool(provider, messages, schemas)
+        except KeyboardInterrupt:
+            print("\nExiting...")
+            break
+        except Exception as e:
+            print(f"Error: {e}")
+            continue
+
+
+def call_tool(provider: AzureLLMProvider, messages: Any, schemas: Any):
+    response = provider.ask_for_tools(messages, schemas)
     response_message = response.choices[0].message
     messages.append(response_message)
     tool_calls = response_message.tool_calls
@@ -54,7 +68,7 @@ def main(prompt: str):
                 )
 
     final_response = provider.ask_for_tools(messages, schemas)
-    print(f"Final Response: {final_response.choices[0].message.content}")
+    print(final_response.choices[0].message.content)
 
 
 def cli():
