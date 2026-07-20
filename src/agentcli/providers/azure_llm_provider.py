@@ -1,11 +1,9 @@
 import os
-from typing import Any, Iterator
+from typing import Any
 
 from openai import OpenAI
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from openai.types.chat import (
-    ChatCompletionToolParam,
-    ChatCompletionMessageParam,
     ChatCompletion,
 )
 
