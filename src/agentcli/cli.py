@@ -1,4 +1,5 @@
 import dataclasses
+import inspect
 import json
 from typing import Any
 
@@ -12,7 +13,20 @@ def main():
     provider = AzureLLMProvider()
     schemas = tools.get_calculator_tools()
     messages: Any = []
+    WELCOME_MESSAGE = """
+        Financial Calculator CLI
+        Ask about mortgages, debt-to-income, and affordability. Examples:
 
+        - "What's the monthly payment on a $400,000 loan at 6.5% for 30 years?"
+        - "What's my DTI if I make $95k a year with $450 in monthly debts?"
+        - "What's my remaining balance after 5 years on a $350,000 loan at 6% for 30 years?"
+        - "How much would I save paying an extra $200/month on a $300,000 loan at 6.5% for 30 years?"
+        - "How much house can I afford on $95,000/year with $450 in monthly debts at 36% DTI, 6.5% rate, 30-year term?"
+
+        Type a question and press Enter. Ctrl+C to exit.
+        """
+    print(WELCOME_MESSAGE)
+    
     while True:
         try:
             prompt = input(">>> ")
@@ -27,48 +41,59 @@ def main():
 
 
 def call_tool(provider: AzureLLMProvider, messages: Any, schemas: Any):
-    response = provider.ask_for_tools(messages, schemas)
-    response_message = response.choices[0].message
-    messages.append(response_message)
-    tool_calls = response_message.tool_calls
+    while True:
+        # get initial response from model with tools
+        response = provider.ask_for_tools(messages, schemas)
+        response_message = response.choices[0].message
 
-    if tool_calls:
-        for tool_call in tool_calls:
-            if tool_call.type == "function":
-                tool_name = tool_call.function.name
-                tool_args = tool_call.function.arguments
-                extracted_tool_args = json.loads(tool_args) if tool_args else {}
+        # append the model's response to the messages list
+        messages.append(response_message)
+        tool_calls = response_message.tool_calls
 
-                if tool_name == "monthly_mortgage_payment":
-                    result = tools.monthly_mortgage_payment(**extracted_tool_args)
-                elif tool_name == "debt_to_income_ratio":
-                    result = tools.debt_to_income_ratio(**extracted_tool_args)
-                elif tool_name == "amortization_point_in_time":
-                    result = tools.amortization_point_in_time(**extracted_tool_args)
+        # if no tool calls, print and exit
+        if not tool_calls:
+            print(response_message.content)
+            break
 
-                # the below two tools return dataclasses, so we convert them to dicts for JSON serialization
-                elif tool_name == "extra_payment_calculator":
-                    result = dataclasses.asdict(
-                        tools.extra_payment_calculator(**extracted_tool_args)
+        # find and execute tool
+        else:
+            for tool_call in tool_calls or []:
+                if tool_call.type == "function":
+                    tool_name = tool_call.function.name
+                    tool_args = tool_call.function.arguments
+                    extracted_tool_args = json.loads(tool_args) if tool_args else {}
+                    result = dispatch(tool_name, extracted_tool_args)
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "name": tool_name,
+                            "content": json.dumps(result),
+                        }
                     )
-                elif tool_name == "affordability_in_reverse":
-                    result = dataclasses.asdict(
-                        tools.affordability_in_reverse(**extracted_tool_args)
-                    )
-                else:
-                    result = f"Unknown tool: {tool_name}"
 
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "name": tool_name,
-                        "content": json.dumps(result),
-                    }
-                )
 
-    final_response = provider.ask_for_tools(messages, schemas)
-    print(final_response.choices[0].message.content)
+def dispatch(tool_name: str, args: Any) -> Any:
+    try:
+        match tool_name:
+            case "monthly_mortgage_payment":
+                inspect.signature(tools.monthly_mortgage_payment).bind(**args)
+                return tools.monthly_mortgage_payment(**args)
+            case "debt_to_income_ratio":
+                inspect.signature(tools.debt_to_income_ratio).bind(**args)
+                return tools.debt_to_income_ratio(**args)
+            case "amortization_point_in_time":
+                inspect.signature(tools.amortization_point_in_time).bind(**args)
+                return tools.amortization_point_in_time(**args)
+            case "extra_payment_calculator":
+                inspect.signature(tools.extra_payment_calculator).bind(**args)
+                return dataclasses.asdict(tools.extra_payment_calculator(**args))
+            case "affordability_in_reverse":
+                inspect.signature(tools.affordability_in_reverse).bind(**args)
+                return dataclasses.asdict(tools.affordability_in_reverse(**args))
+        return f"Unknown tool: {tool_name}"
+    except TypeError as e:
+        return f"Argument mismatch for tool '{tool_name}': {e}"
 
 
 def cli():
