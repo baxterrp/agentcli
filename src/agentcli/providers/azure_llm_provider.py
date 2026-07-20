@@ -34,15 +34,3 @@ class AzureLLMProvider:
             tools=tools,
             max_tokens=self._tokens_max,
         )
-
-    def ask(self, prompt: str) -> Iterator[str]:
-        stream = self._client.chat.completions.create(
-            model=self._model,
-            messages=[{"role": "user", "content": prompt}],
-            stream=True,
-            max_tokens=self._tokens_max,
-        )
-
-        for chunk in stream:
-            if chunk.choices and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content

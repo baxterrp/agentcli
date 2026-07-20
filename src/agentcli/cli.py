@@ -9,7 +9,8 @@ import typer
 from agentcli.providers.azure_llm_provider import AzureLLMProvider
 import agentcli.tools.financial_calculator as tools
 
-loop_cap = os.getenv("AGENTCLI_LOOP_CAP", 5)
+LOOP_CAP: int = int(os.getenv("AGENTCLI_LOOP_CAP", 5))
+
 
 def main():
     provider = AzureLLMProvider()
@@ -47,7 +48,7 @@ def call_tool(provider: AzureLLMProvider, messages: Any, schemas: Any):
 
     while True:
         # check if loop cap is reached
-        if iteration >= int(loop_cap):
+        if iteration >= LOOP_CAP:
             print("Loop cap reached. Exiting.")
             break
 
