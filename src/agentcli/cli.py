@@ -1,6 +1,7 @@
 import dataclasses
 import inspect
 import json
+import os
 from typing import Any
 
 from dotenv import load_dotenv
@@ -8,6 +9,7 @@ import typer
 from agentcli.providers.azure_llm_provider import AzureLLMProvider
 import agentcli.tools.financial_calculator as tools
 
+loop_cap = os.getenv("AGENTCLI_LOOP_CAP", 5)
 
 def main():
     provider = AzureLLMProvider()
@@ -26,7 +28,7 @@ def main():
         Type a question and press Enter. Ctrl+C to exit.
         """
     print(WELCOME_MESSAGE)
-    
+
     while True:
         try:
             prompt = input(">>> ")
@@ -41,7 +43,14 @@ def main():
 
 
 def call_tool(provider: AzureLLMProvider, messages: Any, schemas: Any):
+    iteration = 0
+
     while True:
+        # check if loop cap is reached
+        if iteration >= int(loop_cap):
+            print("Loop cap reached. Exiting.")
+            break
+
         # get initial response from model with tools
         response = provider.ask_for_tools(messages, schemas)
         response_message = response.choices[0].message
@@ -71,6 +80,7 @@ def call_tool(provider: AzureLLMProvider, messages: Any, schemas: Any):
                             "content": json.dumps(result),
                         }
                     )
+            iteration += 1
 
 
 def dispatch(tool_name: str, args: Any) -> Any:
