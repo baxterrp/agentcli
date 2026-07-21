@@ -3,16 +3,24 @@ import inspect
 import json
 import os
 from typing import Any
-
+import asyncio
 from dotenv import load_dotenv
 import typer
 from agentcli.providers.azure_llm_provider import AzureLLMProvider
 import agentcli.tools.financial_calculator as tools
+from openai.types.chat import ChatCompletionMessageToolCallUnion
 
 LOOP_CAP: int = int(os.getenv("AGENTCLI_LOOP_CAP", 5))
 
+app = typer.Typer()
 
+
+@app.command()
 def main():
+    asyncio.run(_main())
+
+
+async def _main():
     provider = AzureLLMProvider()
     schemas = tools.get_calculator_tools()
     messages: Any = []
@@ -34,7 +42,7 @@ def main():
         try:
             prompt = input(">>> ")
             messages.append({"role": "user", "content": prompt})
-            call_tool(provider, messages, schemas)
+            await call_tool(provider, messages, schemas)
         except KeyboardInterrupt:
             print("\nExiting...")
             break
@@ -43,7 +51,7 @@ def main():
             continue
 
 
-def call_tool(provider: AzureLLMProvider, messages: Any, schemas: Any):
+async def call_tool(provider: AzureLLMProvider, messages: Any, schemas: Any):
     iteration = 0
 
     while True:
@@ -53,7 +61,7 @@ def call_tool(provider: AzureLLMProvider, messages: Any, schemas: Any):
             break
 
         # get initial response from model with tools
-        response = provider.ask_for_tools(messages, schemas)
+        response = await provider.ask(messages, schemas)
         response_message = response.choices[0].message
 
         # append the model's response to the messages list
@@ -67,21 +75,31 @@ def call_tool(provider: AzureLLMProvider, messages: Any, schemas: Any):
 
         # find and execute tool
         else:
-            for tool_call in tool_calls or []:
-                if tool_call.type == "function":
-                    tool_name = tool_call.function.name
-                    tool_args = tool_call.function.arguments
-                    extracted_tool_args = json.loads(tool_args) if tool_args else {}
-                    result = dispatch(tool_name, extracted_tool_args)
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tool_call.id,
-                            "name": tool_name,
-                            "content": json.dumps(result),
-                        }
-                    )
-            iteration += 1
+            sem = asyncio.Semaphore(LOOP_CAP)
+            await asyncio.gather(
+                *(invoke_dispatch(sem, messages, tool_call) for tool_call in tool_calls)
+            )
+
+        iteration += 1
+
+
+async def invoke_dispatch(
+    sem: asyncio.Semaphore, messages: Any, tool_call: ChatCompletionMessageToolCallUnion
+):
+    async with sem:
+        if tool_call.type == "function":
+            tool_name = tool_call.function.name
+            tool_args = tool_call.function.arguments
+            extracted_tool_args = json.loads(tool_args) if tool_args else {}
+            result = await asyncio.to_thread(dispatch, tool_name, extracted_tool_args)
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "name": tool_name,
+                    "content": json.dumps(result),
+                }
+            )
 
 
 def dispatch(tool_name: str, args: Any) -> Any:
@@ -109,4 +127,4 @@ def dispatch(tool_name: str, args: Any) -> Any:
 
 def cli():
     load_dotenv()
-    typer.run(main)
+    app()

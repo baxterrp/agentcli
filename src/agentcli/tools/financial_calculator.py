@@ -1,4 +1,3 @@
-from typing import Iterator
 from math import log, ceil
 from dataclasses import dataclass
 from openai.types.chat import ChatCompletionToolParam
