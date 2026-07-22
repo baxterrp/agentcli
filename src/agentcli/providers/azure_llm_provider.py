@@ -13,12 +13,19 @@ class AzureLLMProvider:
         self._endpoint = os.getenv("AZURE_ENDPOINT") or ""
         self._model = os.getenv("AZURE_DEPLOYMENT") or ""
         self._tokens_max = int(os.getenv("AZURE_TOKENS_MAX") or 1024)
+        self._credential = DefaultAzureCredential()
         self._client = AsyncOpenAI(
             base_url=self._endpoint,
             api_key=get_bearer_token_provider(
-                DefaultAzureCredential(), "https://ai.azure.com/.default"
+                self._credential, "https://ai.azure.com/.default"
             ),
         )
+
+    async def __aenter__(self) -> AzureLLMProvider:
+        return self
+
+    async def __aexit__(self, *args) -> None:
+        await self._credential.close()
 
     async def ask(
         self,

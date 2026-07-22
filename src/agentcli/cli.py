@@ -17,38 +17,36 @@ app = typer.Typer()
 
 @app.command()
 def main():
-    asyncio.run(_main())
+    try:
+        asyncio.run(_main())
+    except KeyboardInterrupt:
+        print("\nExiting...")
+    except Exception as e:
+        print(f"Error {e} - Exiting...")
 
 
 async def _main():
-    provider = AzureLLMProvider()
-    schemas = tools.get_calculator_tools()
-    messages: Any = []
-    WELCOME_MESSAGE = """
-        Financial Calculator CLI
-        Ask about mortgages, debt-to-income, and affordability. Examples:
+    async with AzureLLMProvider() as provider:
+        schemas = tools.get_calculator_tools()
+        messages: Any = []
+        WELCOME_MESSAGE = """
+            Financial Calculator CLI
+            Ask about mortgages, debt-to-income, and affordability. Examples:
 
-        - "What's the monthly payment on a $400,000 loan at 6.5% for 30 years?"
-        - "What's my DTI if I make $95k a year with $450 in monthly debts?"
-        - "What's my remaining balance after 5 years on a $350,000 loan at 6% for 30 years?"
-        - "How much would I save paying an extra $200/month on a $300,000 loan at 6.5% for 30 years?"
-        - "How much house can I afford on $95,000/year with $450 in monthly debts at 36% DTI, 6.5% rate, 30-year term?"
+            - "What's the monthly payment on a $400,000 loan at 6.5% for 30 years?"
+            - "What's my DTI if I make $95k a year with $450 in monthly debts?"
+            - "What's my remaining balance after 5 years on a $350,000 loan at 6% for 30 years?"
+            - "How much would I save paying an extra $200/month on a $300,000 loan at 6.5% for 30 years?"
+            - "How much house can I afford on $95,000/year with $450 in monthly debts at 36% DTI, 6.5% rate, 30-year term?"
 
-        Type a question and press Enter. Ctrl+C to exit.
-        """
-    print(WELCOME_MESSAGE)
+            Type a question and press Enter. Ctrl+C to exit.
+            """
+        print(WELCOME_MESSAGE)
 
-    while True:
-        try:
-            prompt = input(">>> ")
+        while True:
+            prompt = await asyncio.to_thread(input, ">>> ")
             messages.append({"role": "user", "content": prompt})
             await call_tool(provider, messages, schemas)
-        except KeyboardInterrupt:
-            print("\nExiting...")
-            break
-        except Exception as e:
-            print(f"Error: {e}")
-            continue
 
 
 async def call_tool(provider: AzureLLMProvider, messages: Any, schemas: Any):
